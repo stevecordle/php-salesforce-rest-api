@@ -1,5 +1,5 @@
 {
-  "name": "bjsmasth/php-salesforce-rest-api",
+  "name": "laszlof/php-salesforce-rest-api",
   "license": "MIT",
   "keywords": [
     "bjsmasth",
@@ -13,6 +13,11 @@
       "name": "Bijesh Shrestha",
       "email": "bjsmasth@gmail.com",
       "homepage": "https://github.com/bjsmasth"
+    },
+    {
+      "name": "Frank Laszlo",
+      "email": "flaszlo@nexcess.net",
+      "homepage": "https://github.com/laszlof"
     }
   ],
   "require": {
