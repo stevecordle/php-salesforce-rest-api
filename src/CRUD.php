@@ -37,6 +37,21 @@ class CRUD
         return json_decode($request->getBody(), true);
     }
 
+    public function get($object, $field, $id)
+    {
+        $url = "{$this->instance_url}/services/data/v39.0/sobjects/{$object}/{$field}/{$id}";
+
+        $client = new Client();
+
+        $request = $client->request('GET', $url, [
+            'headers' => [
+                'Authorization' => "OAuth {$this->access_token}",
+            ]
+        ]);
+
+        return json_decode($request->getBody(), true);
+    }
+
     public function create($object, array $data)
     {
         $url = "{$this->instance_url}/services/data/v39.0/sobjects/{$object}/";
@@ -59,11 +74,7 @@ class CRUD
             );
         }
 
-        $response = json_decode($request->getBody(), true);
-        $id = $response["id"];
-
-        return $id;
-
+        return json_decode($request->getBody(), true);
     }
 
     public function update($object, $id, array $data)
@@ -88,7 +99,7 @@ class CRUD
             );
         }
 
-        return $status;
+        return json_decode($request->getBody(), true);
     }
 
     public function upsert($object, $field, $id, array $data)
@@ -113,7 +124,7 @@ class CRUD
             );
         }
 
-        return $status;
+        return json_decode($request->getBody(), true);
     }
 
     public function delete($object, $id)
