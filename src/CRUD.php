@@ -114,7 +114,6 @@ class CRUD
         $url = "{$this->getApiUrl()}/sobjects/{$object}/{$field}/{$id}";
 
         $client = new Client();
-        var_dump(json_encode($data));
 
         $request = $client->request('PATCH', $url, [
             'headers' => [
