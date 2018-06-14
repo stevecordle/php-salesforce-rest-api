@@ -7,6 +7,8 @@ use Exception\Salesforce as SalesforceException;
 
 class CRUD
 {
+    const API_VERSION = 'v42.0';
+
     protected $instance_url;
     protected $access_token;
 
@@ -20,9 +22,14 @@ class CRUD
         $this->access_token = $_SESSION['salesforce']['access_token'];
     }
 
+    public function getApiUrl()
+    {
+        return "{$this->instance_url}/services/data/" . self::API_VERSION;
+    }
+
     public function query($query)
     {
-        $url = "{$this->instance_url}/services/data/v39.0/query";
+        $url = "{$this->getApiUrl()}/query";
 
         $client = new Client();
         $request = $client->request('GET', $url, [
@@ -37,9 +44,24 @@ class CRUD
         return json_decode($request->getBody(), true);
     }
 
+    public function get($object, $field, $id)
+    {
+        $url = "{$this->getApiUrl()}/sobjects/{$object}/{$field}/{$id}";
+
+        $client = new Client();
+
+        $request = $client->request('GET', $url, [
+            'headers' => [
+                'Authorization' => "OAuth {$this->access_token}",
+            ]
+        ]);
+
+        return json_decode($request->getBody(), true);
+    }
+
     public function create($object, array $data)
     {
-        $url = "{$this->instance_url}/services/data/v39.0/sobjects/{$object}/";
+        $url = "{$this->getApiUrl()}/sobjects/{$object}/";
 
         $client = new Client();
 
@@ -59,16 +81,12 @@ class CRUD
             );
         }
 
-        $response = json_decode($request->getBody(), true);
-        $id = $response["id"];
-
-        return $id;
-
+        return json_decode($request->getBody(), true);
     }
 
     public function update($object, $id, array $data)
     {
-        $url = "{$this->instance_url}/services/data/v39.0/sobjects/{$object}/{$id}";
+        $url = "{$this->getApiUrl()}/sobjects/{$object}/{$id}";
 
         $client = new Client();
 
@@ -88,12 +106,12 @@ class CRUD
             );
         }
 
-        return $status;
+        return json_decode($request->getBody(), true);
     }
 
     public function upsert($object, $field, $id, array $data)
     {
-        $url = "{$this->instance_url}/services/data/v39.0/sobjects/{$object}/{$field}/{$id}";
+        $url = "{$this->getApiUrl()}/sobjects/{$object}/{$field}/{$id}";
 
         $client = new Client();
 
@@ -113,12 +131,12 @@ class CRUD
             );
         }
 
-        return $status;
+        return json_decode($request->getBody(), true);
     }
 
-    public function delete($object, $id)
+    public function delete($object, $field, $id)
     {
-        $url = "{$this->instance_url}/services/data/v39.0/sobjects/{$object}/{$id}";
+        $url = "{$this->getApiUrl()}/sobjects/{$object}/{$field}/{$id}";
 
         $client = new Client();
         $request = $client->request('DELETE', $url, [
