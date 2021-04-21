@@ -7,7 +7,7 @@ use bjsmasth\Salesforce\Exception\Salesforce as SalesforceException;
 
 class CRUD
 {
-    const API_VERSION = 'v42.0';
+    const API_VERSION = 'v51.0';
 
     protected $instance_url;
     protected $access_token;
