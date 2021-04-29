@@ -22,9 +22,19 @@ class CRUD
         $this->access_token = $_SESSION['salesforce']['access_token'];
     }
 
+    public function getApiBaseUrl()
+    {
+        return $this->instance_url;
+    }
+
+    public function getApiPath()
+    {
+        return "/services/data/" . self::API_VERSION;
+    }
+
     public function getApiUrl()
     {
-        return "{$this->instance_url}/services/data/" . self::API_VERSION;
+        return $this->getApiBaseUrl() . $this->getApiPath();
     }
 
     public function query($query)
@@ -57,6 +67,20 @@ class CRUD
         ]);
 
         return json_decode($request->getBody(), true);
+    }
+
+    public function getPath($path)
+    {
+        $url = $this->getApiBaseUrl() . $path;
+        $client = new Client();
+
+        $request = $client->request('GET', $url, [
+            'headers' => [
+                'Authorization' => "OAuth {$this->access_token}",
+            ]
+        ]);
+
+        return $request->getBody()->getContents();
     }
 
     public function create($object, array $data)
