@@ -4,6 +4,7 @@ namespace bjsmasth\Salesforce;
 
 use GuzzleHttp\Client;
 use bjsmasth\Salesforce\Exception\Salesforce as SalesforceException;
+use Psr\Http\Message\StreamInterface;
 
 class CRUD
 {
@@ -69,8 +70,7 @@ class CRUD
         return json_decode($request->getBody(), true);
     }
 
-    public function getPath($path)
-    {
+    public function streamPath($path) : StreamInterface {
         $url = $this->getApiBaseUrl() . $path;
         $client = new Client();
 
@@ -80,7 +80,7 @@ class CRUD
             ]
         ]);
 
-        return $request->getBody()->getContents();
+        return $request->getBody();
     }
 
     public function create($object, array $data)
