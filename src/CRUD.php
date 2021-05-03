@@ -4,6 +4,7 @@ namespace bjsmasth\Salesforce;
 
 use GuzzleHttp\Client;
 use bjsmasth\Salesforce\Exception\Salesforce as SalesforceException;
+use Psr\Http\Message\StreamInterface;
 
 class CRUD
 {
@@ -22,9 +23,19 @@ class CRUD
         $this->access_token = $_SESSION['salesforce']['access_token'];
     }
 
+    public function getApiBaseUrl()
+    {
+        return $this->instance_url;
+    }
+
+    public function getApiPath()
+    {
+        return "/services/data/" . self::API_VERSION;
+    }
+
     public function getApiUrl()
     {
-        return "{$this->instance_url}/services/data/" . self::API_VERSION;
+        return $this->getApiBaseUrl() . $this->getApiPath();
     }
 
     public function query($query)
@@ -57,6 +68,19 @@ class CRUD
         ]);
 
         return json_decode($request->getBody(), true);
+    }
+
+    public function streamPath($path) : StreamInterface {
+        $url = $this->getApiBaseUrl() . $path;
+        $client = new Client();
+
+        $request = $client->request('GET', $url, [
+            'headers' => [
+                'Authorization' => "OAuth {$this->access_token}",
+            ]
+        ]);
+
+        return $request->getBody();
     }
 
     public function create($object, array $data)
