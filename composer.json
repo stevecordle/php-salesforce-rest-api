@@ -1,8 +1,12 @@
 {
-  "name": "bjsmasth/php-salesforce-rest-api",
+  "name": "nexcess/php-salesforce-rest-api",
+  "description": "Salesforce API Client based on bjsmasth/php-salesforce-rest-api",
+  "version": "1.0",
   "license": "MIT",
   "keywords": [
     "bjsmasth",
+    "nexcess",
+    "salesforce",
     "php salesforce",
     "php salesforce rest",
     "php salesforce rest api",
@@ -13,15 +17,21 @@
       "name": "Bijesh Shrestha",
       "email": "bjsmasth@gmail.com",
       "homepage": "https://github.com/bjsmasth"
+    },
+    {
+      "name": "Nexcess.net (a Liquid Web brand)",
+      "email": "",
+      "homepage": "https://github.com/nexcess"
     }
   ],
   "require": {
-    "guzzlehttp/guzzle": "^6.2",
-    "php": ">=5.5"
+    "php": "^7.4, ^8",
+    "guzzlehttp/guzzle": "^6.2, ^7",
+    "php-enspired/exceptable": "^3.1"
   },
   "autoload": {
     "psr-4": {
-      "bjsmasth\\Salesforce\\": "src/"
+      "nexcess\\Salesforce\\": "src/"
     }
   }
 }
