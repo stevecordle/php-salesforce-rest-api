@@ -4,7 +4,7 @@ namespace Nexcess\Salesforce\Authentication;
 
 use Nexcess\Salesforce\ {
   Authentication\Authentication,
-  Exception\Authentication as AuthenticationException
+  Error\Authentication as AuthenticationException
 };
 
 use GuzzleHttp\Client as HttpClient;
@@ -23,25 +23,23 @@ class Password implements Authentication {
   private string $instanceUrl;
 
   /**
-   * Authenticates with the Salesforce Api using a password.
+   * {@inheritDoc}
    *
    * This method does not validate or process provided options.
-   *
-   * @param array $parameters Authentication parameters:
-   *  - string "grant_type"
+   * Expected authentication parameters:
+   *  - string "endpoint"
    *  - string "client_id"
    *  - string "client_secret"
    *  - string "username"
    *  - string "password"
-   * @throws AuthenticationException If authentication fails
    */
-  public function authenticate(array $parameters) : void {
-    $response = (new HttpClient(['base_uri' => self::LOGIN_ENDPOINT]))
-      ->post('/services/oauth2/token', ['form_params' => $parameters]);
+  public function authenticate(array $parameters) : Authentication {
+    $response = (new HttpClient(['base_uri' => $parameters['endpoint'] ?? self::LOGIN_ENDPOINT]))
+      ->post('/services/oauth2/token', ['form_params' => ['grant_type' => 'password'] + $parameters]);
 
     $auth = json_decode($response->getBody());
     if (! isset($auth->access_token, $auth->instance_url)) {
-      AuthenticationException::throw(
+      throw AuthenticationException::create(
         AuthenticationException::FAILED,
         ['response' => $response, 'parameters' => $this->obfuscate($parameters)]
       );
@@ -49,12 +47,14 @@ class Password implements Authentication {
 
     $this->accessToken = $auth->access_token;
     $this->instanceUrl = $auth->instance_url;
+
+    return $this;
   }
 
   /**
    * Builds a new Http client using this authentication
    *
-   * @throws AuthenticationException If authentication has not yet succeeded
+   * @throws AuthenticationException NOT_AUTHENTICATED if authentication has not yet succeeded
    */
   public function httpClient() : HttpClient {
     if (! isset($this->instanceUrl, $this->accessToken)) {
@@ -63,7 +63,8 @@ class Password implements Authentication {
 
     return new HttpClient([
       'base_uri' => $this->instanceUrl,
-      'headers' => ['Authorization' => "OAuth {$this->accessToken}"]
+      'headers' => ['Authorization' => "OAuth {$this->accessToken}"],
+      'http_errors' => false
     ]);
   }
 

@@ -2,18 +2,28 @@
 
 namespace Nexcess\Salesforce\Authentication;
 
+use GuzzleHttp\Client as HttpClient;
+
+use Nexcess\Salesforce\Error\Authentication as AuthenticationException;
+
 /**
- * Authentication information for a Salesforce login.
+ * Handles Salesforce authentication.
  */
 interface Authentication {
 
   /**
-   * Gets the Salesforce access token.
+   * Authenticates with the Salesforce Api.
+   *
+   * @param array $parameters Authentication parameters
+   * @throws AuthenticationException FAILED on failure
+   * @return Authentication $this
    */
-  public function accessToken() : string;
+  public function authenticate(array $parameters) : Authentication;
 
   /**
-   * Gets the Salesforce Api URL associated with the access token.
+   * Gets a new Http client using this authentication
+   *
+   * @throws AuthenticationException NOT_AUTHENTICATED if authentication has not yet succeeded
    */
-  public function instanceUrl() : string;
+  public function httpClient() : HttpClient;
 }

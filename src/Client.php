@@ -2,39 +2,81 @@
 
 namespace Nexcess\Salesforce;
 
+use Closure,
+  Throwable;
+
 use Nexcess\Salesforce\ {
   Authentication\Authentication,
-  Exception\Salesforce as SalesforceException,
-  Exception\Validation as ValidationException,
+  Error\Salesforce as SalesforceException,
+  Error\Usage as UsageException,
   Result,
   SalesforceObject
 };
 
 use GuzzleHttp\Client as HttpClient;
 
-use Psr\Http\Message\StreamInterface as Stream;
+use Psr\Http\Message\ {
+  ResponseInterface as Response,
+  StreamInterface as Stream
+};
 
 class Client {
 
   /** @var string Target Salesforce Api version. */
   public const API_VERSION = 'v51.0';
 
+  /**
+   * Supported SOQL data types.
+   *
+   * @var string TYPE_STRING
+   * @var string TYPE_INTEGER
+   * @var string TYPE_FLOAT
+   * @var string TYPE_DECIMAL
+   * @var string TYPE_BOOLEAN
+   * @var string TYPE_NULL
+   */
+  public const TYPE_STRING = 'string';
+  public const TYPE_INTEGER = 'integer';
+  public const TYPE_FLOAT = 'double';
+  public const TYPE_DECIMAL = 'decimal';
+  public const TYPE_BOOLEAN = 'boolean';
+  public const TYPE_NULL = 'NULL';
+
   /** @var string Base path for Api requests. */
   protected const API_PATH = '/services/data/' . self::API_VERSION;
 
   /**
+   * @var string[] Literal value:escaped value map.
+   *
+   * @see https://developer.salesforce.com/docs/atlas.en-us.soql_sosl.meta/
+   *  soql_sosl/sforce_api_calls_soql_select_quotedstringescapes.htm
+   */
+  protected const ESCAPE_MAP = [
+    "\n" => '\n',
+    "\r" => '\r',
+    "\t" => '\t',
+    "\x07" => '\b',
+    "\f" => '\f',
+    '"' => '\"',
+    '\'' => '\\\'',
+    '\\' => '\\\\'
+  ];
+
+  /**
    * Relevant HTTP status codes.
+   *
+   * @internal
    *
    * @var int HTTP_OK
    * @var int HTTP_CREATED
    * @var int HTTP_NO_CONTENT
    */
-  protected const HTTP_OK = 200;
-  protected const HTTP_CREATED = 201;
-  protected const HTTP_NO_CONTENT = 204;
+  public const HTTP_OK = 200;
+  public const HTTP_CREATED = 201;
+  public const HTTP_NO_CONTENT = 204;
 
   /** @var HttpClient Api client. */
-  protected HttpClient $httpClient;
+  private HttpClient $httpClient;
 
   /* @var string[] Map of salesforce object type:fully qualified SalesforceObject classnames. */
   protected array $objectMap = [];
@@ -53,15 +95,9 @@ class Client {
    *
    * @param SalesforceObject $object The object to create
    * @throws SalesforceException CREATE_FAILED on failure
-   * @throws ValidationException If object state is invalid
    */
-  public function create(SalesforceObject $object) : Result {
-    $object->validate();
-
-    $response = $this->httpClient->post(
-      self::API_PATH . "/sobjects/{$object->type()}",
-      ['json' => $object->toArray()]
-    );
+  public function create(SalesforceObject $object) : SalesforceObject {
+    $response = $this->request('POST', "/sobjects/{$object->type()}", ['json' => $object->toArray()]);
     if ($response->getStatusCode() !== self::HTTP_CREATED) {
       throw SalesforceException::create(
         SalesforceException::CREATE_FAILED,
@@ -69,7 +105,9 @@ class Client {
       );
     }
 
-    return Result::from($response, $this->objectMap);
+    $created = clone $object;
+    $created->Id = $this->getResultFrom($response)->lastId();
+    return $created;
   }
 
   /**
@@ -78,8 +116,12 @@ class Client {
    * @param SalesforceObject $object The object to create
    * @throws SalesforceException DELETE_FAILED on failure
    */
-  public function delete(SalesforceObject $object) : Result {
-    return $this->deleteByExternalId($object->type(), 'Id', $object->id());
+  public function delete(SalesforceObject $object) : SalesforceObject {
+    $this->deleteByExternalId($object->type(), 'Id', $object->Id);
+
+    $deleted = clone $object;
+    $deleted->Id = null;
+    return $deleted;
   }
 
   /**
@@ -90,10 +132,8 @@ class Client {
    * @param string $id 18-character Salesforce Id
    * @throws SalesforceException DELETE_FAILED on failure
    */
-  public function DeleteByExternalId(string $type, string $id_field, string $id) : Result {
-    $response = $this->httpClient->delete(
-      self::API_PATH . "/sobjects/{$type}/{$id_field}/{$id}"
-    );
+  public function deleteByExternalId(string $type, string $id_field, string $id) : Result {
+    $response = $this->request('DELETE', "/sobjects/{$type}/{$id_field}/{$id}");
     if ($response->getStatusCode() !== self::HTTP_NO_CONTENT) {
       throw SalesforceException::create(
         SalesforceException::DELETE_FAILED,
@@ -101,7 +141,7 @@ class Client {
       );
     }
 
-    return Result::from($response, $this->objectMap);
+    return $this->getResultFrom($response);
   }
 
   /**
@@ -111,8 +151,8 @@ class Client {
    * @param string $id 18-character Salesforce Id
    * @throws SalesforceException GET_FAILED on failure
    */
-  public function get(string $type, string $id) : Result {
-    return $this->getByExternalId($type, 'Id', $id);
+  public function get(string $type, string $id) : SalesforceObject {
+    return $this->getByExternalId($type, 'Id', $id)->first();
   }
 
   /**
@@ -124,7 +164,7 @@ class Client {
    * @throws SalesforceException GET_FAILED on failure
    */
   public function getByExternalId(string $type, string $id_field, string $id) : Result {
-    $response = $this->httpClient->get(self::API_PATH . "/sobjects/{$type}/{$id_field}/{$id}");
+    $response = $this->request('GET', "/sobjects/{$type}/{$id_field}/{$id}");
     if ($response->getStatusCode() !== self::HTTP_OK) {
       throw SalesforceException::create(
         SalesforceException::GET_FAILED,
@@ -132,7 +172,7 @@ class Client {
       );
     }
 
-    return Result::from($response, $this->objectMap);
+    return $this->getResultFrom($response);
   }
 
   /**
@@ -143,7 +183,7 @@ class Client {
   public function mapObjects(array $object_map) : void {
     foreach ($object_map as $type => $fqcn) {
       if (! is_a($fqcn, SalesforceObject::class, true)) {
-        // throw
+        throw UsageException::create(UsageException::BAD_SFO_CLASSNAME, ['fqcn' => $fqcn]);
       }
 
       $this->objectMap[$type] = $fqcn;
@@ -152,12 +192,16 @@ class Client {
 
   /**
    * Performs a SOQL query.
-   * Template parameter values are escaped prior to formatting.
+   *
+   * @param string $template SOQL query with optional {tokens} for parameters
+   * @param array $parameters Parameter values (escaped prior to formatting)
+   * @throws UsageException On error
    */
-  public function query(string $method, string $template, array $parameters) : Result {
-    $response = $this->httpClient->get(
-      self::API_PATH . "/query",
-      ['query' => ['q' => $this->parseSoql($template, $parameters)]]
+  public function query(string $template, array $parameters = []) : Result {
+    $response = $this->request(
+      'GET',
+      '/query',
+      ['query' => ['q' => $this->prepare($template, $parameters)]]
     );
     if ($response->getStatusCode() !== self::HTTP_OK) {
       throw SalesforceException::create(
@@ -166,7 +210,7 @@ class Client {
       );
     }
 
-    return Result::from($response, $this->objectMap);
+    return $this->getResultFrom($response);
   }
 
   /**
@@ -175,7 +219,15 @@ class Client {
    * @param string $path The Api path to request
    */
   public function stream(string $path) : Stream {
-    return $this->httpClient->get($path)->getBody();
+    try {
+      return $this->httpClient->get($path)->getBody();
+    } catch (Throwable $e) {
+      throw SalesforceException::create(
+        SalesforceException::HTTP_REQUEST_FAILED,
+        ['method' => 'GET', 'path' => $path],
+        $e
+      );
+    }
   }
 
   /**
@@ -183,14 +235,34 @@ class Client {
    *
    * @param SalesforceObject $object The object to update from
    * @throws SalesforceException UPDATE_FAILED on failure
-   * @throws ValidationException If object state is invalid
+   * @throws UsageException NO_SUCH_FIELD If the object does not contain the given id_field
    */
-  public function update(SalesforceObject $object) : Result {
-    $object->validate();
+  public function update(
+    SalesforceObject $object,
+    string $id_field = "Id",
+    string $id = null
+  ) : SalesforceObject {
+    if (! property_exists($object, $id_field)) {
+      throw UsageException::create(
+        UsageException::NO_SUCH_FIELD,
+        ['type' => $object->type(), 'field' => $id_field]
+      );
+    }
 
-    $response =$this->httpClient->patch(
-      self::API_PATH . "/sobjects/{$object->type()}/{$object->id()}",
-      ['json' => $object->toArray()]
+    $id ??= $object->$id_field;
+    if (empty($id)) {
+      throw UsageException::create(
+        UsageException::EMPTY_ID,
+        ['type' => $object->type(), 'id_field' => $id_field]
+      );
+    }
+
+    $fields = $object->toArray();
+    unset($fields['Id']);
+    $response = $this->request(
+      'PATCH',
+      "/sobjects/{$object->type()}/{$id_field}/{$id}",
+      ['json' => $fields]
     );
 
     if ($response->getStatusCode() !== self::HTTP_OK) {
@@ -200,35 +272,173 @@ class Client {
       );
     }
 
-    return Result::from($response, $this->objectMap);
+    return $this->get($object->type(), $object->Id);
   }
 
   /**
-   * Updates a record in Salesforce, associating it with the given External id.
-   * The record is created if it does not already exist.
+   * Gets a new Result object for the next page of results.
    *
-   * @param SalesforceObject $object The object to update from
-   * @param string $id_field The External Id field to look up by
-   * @param string $id 18-character Salesforce Id
-   * @throws SalesforceException UPSERT_FAILED on failure
-   * @throws ValidationException If object state is invalid
+   * @param string $url Url for the page
+   * @return Result New Result object on success
    */
-  public function upsert(SalesforceObject $object, string $id_field, string $id) : Result {
-    $object->validate();
+  protected function getMoreResultsFrom(string $url) : Result {
+    return $this->getResultFrom($this->httpClient->get($url));
+  }
 
-    $response = $this->httpClient->patch(
-      self::API_PATH . "/sobjects/{$object->type()}/{$id_field}/{$id}",
-      ['json' => $object->toArray()]
+  /**
+   * Gets a new Result object for an Api Response.
+   *
+   * @param Response $response The Salesforce Api Response
+   * @return Result New Result object on success
+   */
+  protected function getResultFrom(Response $response) : Result {
+    return Result::from(
+      $response,
+      $this->objectMap,
+      Closure::fromCallable([$this, 'getMoreResultsFrom'])
     );
+  }
 
-    $status = $response->getStatusCode();
-    if ($status !== self::HTTP_OK && $status !== self::HTTP_CREATED) {
-      throw SalesforceException::create(
-        SalesforceException::UPSERT_FAILED,
-        $this->getResponseContext($response)
-      );
+  /**
+   * Gets error context from an Api response.
+   *
+   * @param Response $response Http response to get context from
+   */
+  protected function getResponseContext(Response $response) : array {
+    $payload = json_decode($response->getBody()->__toString() ?: '[]')[0] ?? [];
+
+    return array_filter(
+      [
+        'response' => $response,
+        'status' => $response->getStatusCode(),
+        'reason' => $response->getReasonPhrase(),
+        'sf_id' => $payload->id ?? null,
+        'sf_errors' => $payload->errors ?? null,
+        'sf_success' => $payload->success ?? null,
+        'sf_created' => $payload->created ?? null,
+        'sf_error_code' => $payload->errorCode ?? null,
+        'sf_error_message' => isset($payload->errors) ?
+          join("\n", $payload->errors) :
+          ($payload->message ?? null)
+      ],
+      fn ($value) => isset($value)
+    );
+  }
+
+  /**
+   * Quotes and interpolates parameter values into an SOQL template.
+   *
+   * @param string $template SOQL template with value {tokens}
+   * @param array $parameters Parameter token:value map
+   * @throws UsageException On error
+   * @return string Interpolated SOQL on success
+   */
+  protected function prepare(string $template, array $parameters) : string {
+    if (! empty($parameters)) {
+      $replacements = [];
+      foreach ($parameters as $field => $value) {
+        $replacements["{{$field}}"] = $this->quote($value);
+      }
+
+      $template = strtr($template, $replacements);
     }
 
-    return Result::from($response, $this->objectMap);
+    return $template;
+  }
+
+  /**
+   * Quotes a value for use in a SOQL query.
+   *
+   * @param mixed $value The value to quote
+   * @throws UsageException UNSUPPORTED_DATATTYPE if the given type is not one of self::TYPE_*
+   * @throws UsageException UNQUOTABLE_VALUE if the value cannot be quoted as the given type
+   * @param string $type The intended datatype
+   */
+  protected function quote($value, string $type = null) : string {
+    $actual_type = gettype($value);
+    switch ($type ?? $actual_type) {
+      case self::TYPE_STRING:
+        if (! in_array($actual_type, [self::TYPE_STRING, self::TYPE_INTEGER, self::TYPE_FLOAT])) {
+          throw UsageException::create(
+            UsageException::UNQUOTABLE_VALUE,
+            ['type' => $type, 'actual_type' => $actual_type, 'value' => $value]
+          );
+        }
+
+        return '\'' . strtr($value, self::ESCAPE_MAP) . '\'';
+      case self::TYPE_INTEGER:
+        $integer = filter_var($value, FILTER_VALIDATE_INT);
+        if ($integer === false) {
+          throw UsageException::create(
+            UsageException::UNQUOTABLE_VALUE,
+            ['type' => $type, 'actual_type' => $actual_type, 'value' => $value]
+          );
+        }
+
+        return $integer;
+      case self::TYPE_FLOAT:
+        $float = filter_var($value, FILTER_VALIDATE_FLOAT);
+        if ($float === false) {
+          throw UsageException::create(
+            UsageException::UNQUOTABLE_VALUE,
+            ['type' => $type, 'actual_type' => $actual_type, 'value' => $value]
+          );
+        }
+
+        return $float;
+      case self::TYPE_DECIMAL:
+        if (
+          $actual_type !== self::TYPE_INTEGER &&
+          ! ($actual_type === self::TYPE_FLOAT && filter_var($value, FILTER_VALIDATE_INT) !== false) &&
+          ! ($actual_type === self::TYPE_STRING && filter_var($value, FILTER_VALIDATE_FLOAT) !== false)
+        ) {
+          throw UsageException::create(
+            UsageException::UNQUOTABLE_VALUE,
+            ['type' => $type, 'actual_type' => $actual_type, 'value' => $value]
+          );
+        }
+
+        return (string) $value;
+      case self::TYPE_BOOLEAN:
+        if ($actual_type !== self::TYPE_BOOLEAN) {
+          throw UsageException::create(
+            UsageException::UNQUOTABLE_VALUE,
+            ['type' => $type, 'actual_type' => $actual_type, 'value' => $value]
+          );
+        }
+
+        return json_encode($value);
+      case self::TYPE_NULL:
+        if ($actual_type !== self::TYPE_NULL) {
+          throw UsageException::create(
+            UsageException::UNQUOTABLE_VALUE,
+            ['type' => $type, 'actual_type' => $actual_type, 'value' => $value]
+          );
+        }
+
+        return json_encode($value);
+      default:
+        throw UsageException::create(UsageException::UNSUPPORTED_DATATYPE, ['type' => $type]);
+    }
+  }
+
+  /**
+   * Performs an HTTP request and returns the Api Response.
+   *
+   * @param string $method One of GET|POST|PATCH|DELETE
+   * @param string $path URI, without base API_PATH
+   * @param array $options Guzzle options
+   */
+  protected function request(string $method, string $path, array $options = []) : Response {
+    try {
+      $path = self::API_PATH . $path;
+      return $this->httpClient->request($method, $path, $options);
+    } catch (Throwable $e) {
+      throw SalesforceException::create(
+        SalesforceException::HTTP_REQUEST_FAILED,
+        ['method' => $method, 'path' => $path, 'options' => $options],
+        $e
+      );
+    }
   }
 }
