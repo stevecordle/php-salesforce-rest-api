@@ -95,16 +95,10 @@ Upsert
        'Name' => 'another name',
     ];
     
-    $crud->update('Account', 'API Name/ Field Name', 'value', $new_data); #returns status_code 204 or 201
+    $crud->upsert('Account', 'API Name/ Field Name', 'value', $new_data); #returns status_code 204 or 201
     
 ```
 
-Delete
-
-```bash
-    $crud->delete('Account', $id);
-
-```
 Delete
 
 ```bash
