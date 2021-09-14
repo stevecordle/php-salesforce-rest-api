@@ -1,4 +1,10 @@
 <?php
+/**
+ * @package Nexcess/Salesforce
+ * @author Nexcess.net <nocworx@nexcess.net>
+ * @copyright 2021 LiquidWeb Inc.
+ * @license MIT
+ */
 
 namespace Nexcess\Salesforce\Error;
 
