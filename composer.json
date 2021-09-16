@@ -30,7 +30,8 @@
   },
   "autoload": {
     "psr-4": {
-      "Nexcess\\Salesforce\\": "src/"
+      "Nexcess\\Salesforce\\": "src/",
+      "Nexcess\\Salesforce\\Test\\": "tests/"
     }
   },
   "scripts": {
