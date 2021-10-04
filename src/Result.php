@@ -180,7 +180,7 @@ class Result implements IteratorAggregate {
 
           // normalize query/get
           if (isset($results['attributes'])) {
-            return ['done' => true, 'totalSize' => true, 'records' => [$results]];
+            return ['done' => true, 'totalSize' => 1, 'records' => [$results]];
           }
           return $results;
         case Client::HTTP_NO_CONTENT:
