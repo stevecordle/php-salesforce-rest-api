@@ -39,7 +39,7 @@ _Check [Salesforce's Help Docs](https://help.salesforce.com/s/articleView?id=sf.
 
 Creating a new Api client and connecting:
 ```php
-use Nexcess\Salesforce {
+use Nexcess\Salesforce\ {
   Authentication\Password,
   Client
 };
